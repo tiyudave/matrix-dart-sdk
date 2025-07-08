@@ -6040,4 +6040,89 @@ class Api {
     final json = jsonDecode(responseString);
     return json as Map<String, Object?>;
   }
+
+  /// 领取红包
+  /// response
+  /// {
+  //     "amount": 200,           // 抢到的金额（分）
+  //     "remaining_amount": 800, // 剩余金额
+  //     "remaining_count": 4     // 剩余个数
+  // }
+  Future<Map<String, dynamic>> getRedPacket(
+    String packetId,
+  ) async {
+    final requestUri = Uri(
+      path: '_matrix/client/v1/red_packet/$packetId',
+    );
+    final request = Request('POST', baseUri!.resolveUri(requestUri));
+    request.headers['authorization'] = 'Bearer ${bearerToken!}';
+    request.headers['content-type'] = 'application/json';
+    final response = await httpClient.send(request);
+    final responseBody = await response.stream.toBytes();
+    if (response.statusCode != 200) unexpectedResponse(response, responseBody);
+    final responseString = utf8.decode(responseBody);
+    final json = jsonDecode(responseString);
+    return json;
+  }
+
+  /// 查看红包记录
+  /// response
+  /// {
+  //     "records": [
+  //         {
+  //             "record_id": "record_red_packet_$event_id_user1",
+  //             "packet_id": "red_packet_$event_id",
+  //             "amount": 200,
+  //             "created_ts": 1640995200000,
+  //             "sender_id": "@sender:example.com",
+  //             "packet_type": "LUCKY",
+  //             "receiver_id": null
+  //         }
+  //     ],
+  //     "total": 50
+  // }
+  ///响应字段说明：
+  // - records: 红包记录列表
+  //   - record_id: 记录ID
+  //   - packet_id: 红包ID
+  //   - amount: 抢到的金额（分）
+  //   - created_ts: 抢红包时间戳
+  //   - sender_id: 发送红包的用户ID
+  //   - packet_type: 红包类型（PRIVATE、LUCKY、NORMAL、EXCLUSIVE）
+  //   - receiver_id: 接收者用户ID（私发和专属红包有值，其他类型为null）
+  // - total: 总记录数
+  Future<Map<String, dynamic>> getRedPacketHistory(
+    int limit,
+    int offset,
+  ) async {
+    final requestUri =
+        Uri(path: '_matrix/client/v1/red_packet/records', queryParameters: {
+      'limit': limit,
+      'offset': offset,
+    });
+    final request = Request('GET', baseUri!.resolveUri(requestUri));
+    request.headers['authorization'] = 'Bearer ${bearerToken!}';
+    request.headers['content-type'] = 'application/json';
+    final response = await httpClient.send(request);
+    final responseBody = await response.stream.toBytes();
+    if (response.statusCode != 200) unexpectedResponse(response, responseBody);
+    final responseString = utf8.decode(responseBody);
+    final json = jsonDecode(responseString);
+    return json;
+  }
+
+  Future<Map<String, dynamic>> getRedPacketBalance() async {
+    final requestUri = Uri(
+      path: '_matrix/client/v1/red_packet/wallet',
+    );
+    final request = Request('GET', baseUri!.resolveUri(requestUri));
+    request.headers['authorization'] = 'Bearer ${bearerToken!}';
+    request.headers['content-type'] = 'application/json';
+    final response = await httpClient.send(request);
+    final responseBody = await response.stream.toBytes();
+    if (response.statusCode != 200) unexpectedResponse(response, responseBody);
+    final responseString = utf8.decode(responseBody);
+    final json = jsonDecode(responseString);
+    return json;
+  }
 }
