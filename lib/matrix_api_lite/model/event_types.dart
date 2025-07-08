@@ -114,4 +114,5 @@ abstract class EventTypes {
   static const String GroupCallMemberReplaces = '$GroupCallMember.replaces';
   static const String GroupCallMemberAssertedIdentity =
       '$GroupCallMember.asserted_identity';
+  static const String RedPacket = 'm.room.red_packet';
 }

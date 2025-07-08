@@ -34,5 +34,6 @@ abstract class MessageTypes {
   static const String Location = 'm.location';
   static const String Sticker = 'm.sticker';
   static const String BadEncrypted = 'm.bad.encrypted';
+  static const String RedPacket = 'm.red_packet';
   static const String None = 'm.none';
 }

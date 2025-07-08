@@ -115,6 +115,7 @@ abstract class EventLocalizations {
       case MessageTypes.Text:
       case MessageTypes.Notice:
       case MessageTypes.None:
+      case MessageTypes.RedPacket:
       default:
         return body;
     }
@@ -129,6 +130,8 @@ abstract class EventLocalizations {
           event.senderFromMemoryOrFallback.calcDisplayname(i18n: i18n),
         ),
     EventTypes.Redaction: (event, i18n, body) => i18n.redactedAnEvent(event),
+    EventTypes.RedPacket: (event, i18n, body) =>
+        _localizedBodyNormalMessage(event, i18n, body),
     EventTypes.RoomAliases: (event, i18n, body) => i18n.changedTheRoomAliases(
           event.senderFromMemoryOrFallback.calcDisplayname(i18n: i18n),
         ),
