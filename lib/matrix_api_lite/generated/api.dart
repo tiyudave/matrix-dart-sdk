@@ -18,8 +18,10 @@ class Api {
   Client httpClient;
   Uri? baseUri;
   String? bearerToken;
+
   Api({Client? httpClient, this.baseUri, this.bearerToken})
       : httpClient = httpClient ?? Client();
+
   Never unexpectedResponse(BaseResponse response, Uint8List body) {
     throw Exception('http error response');
   }
@@ -6052,7 +6054,7 @@ class Api {
     String packetId,
   ) async {
     final requestUri = Uri(
-      path: '_matrix/client/v1/red_packet/$packetId',
+      path: '_matrix/client/v1/red_packet/grab/$packetId',
     );
     final request = Request('POST', baseUri!.resolveUri(requestUri));
     request.headers['authorization'] = 'Bearer ${bearerToken!}';
@@ -6091,18 +6093,43 @@ class Api {
   //   - packet_type: 红包类型（PRIVATE、LUCKY、NORMAL、EXCLUSIVE）
   //   - receiver_id: 接收者用户ID（私发和专属红包有值，其他类型为null）
   // - total: 总记录数
-  Future<Map<String, dynamic>> getRedPacketHistory(
+  Future<Map<String, dynamic>> getRedPacketSentHistory(
     int limit,
-    int offset,
+    int page,
   ) async {
-    final requestUri =
-        Uri(path: '_matrix/client/v1/red_packet/records', queryParameters: {
-      'limit': limit,
-      'offset': offset,
-    });
-    final request = Request('GET', baseUri!.resolveUri(requestUri));
+    final requestUri = Uri(path: '_matrix/client/v1/red_packet/records/sent');
+    final request = Request('POST', baseUri!.resolveUri(requestUri));
     request.headers['authorization'] = 'Bearer ${bearerToken!}';
     request.headers['content-type'] = 'application/json';
+    request.bodyBytes = utf8.encode(
+      jsonEncode({
+        'limit': limit.toString(),
+        'page': page.toString(),
+      }),
+    );
+    final response = await httpClient.send(request);
+    final responseBody = await response.stream.toBytes();
+    if (response.statusCode != 200) unexpectedResponse(response, responseBody);
+    final responseString = utf8.decode(responseBody);
+    final json = jsonDecode(responseString);
+    return json;
+  }
+
+  Future<Map<String, dynamic>> getRedPacketGrabHistory(
+    int limit,
+    int page,
+  ) async {
+    final requestUri =
+        Uri(path: '_matrix/client/v1/red_packet/records/grabbed');
+    final request = Request('POST', baseUri!.resolveUri(requestUri));
+    request.headers['authorization'] = 'Bearer ${bearerToken!}';
+    request.headers['content-type'] = 'application/json';
+    request.bodyBytes = utf8.encode(
+      jsonEncode({
+        'limit': limit.toString(),
+        'page': page.toString(),
+      }),
+    );
     final response = await httpClient.send(request);
     final responseBody = await response.stream.toBytes();
     if (response.statusCode != 200) unexpectedResponse(response, responseBody);
@@ -6115,9 +6142,34 @@ class Api {
     final requestUri = Uri(
       path: '_matrix/client/v1/red_packet/wallet',
     );
-    final request = Request('GET', baseUri!.resolveUri(requestUri));
+    final request = Request('POST', baseUri!.resolveUri(requestUri));
     request.headers['authorization'] = 'Bearer ${bearerToken!}';
     request.headers['content-type'] = 'application/json';
+    final response = await httpClient.send(request);
+    final responseBody = await response.stream.toBytes();
+    if (response.statusCode != 200) unexpectedResponse(response, responseBody);
+    final responseString = utf8.decode(responseBody);
+    final json = jsonDecode(responseString);
+    return json;
+  }
+
+  Future<Map<String, dynamic>> getRedPacketDetailById(
+    String packetId,
+  ) async {
+    final requestUri = Uri(
+      path:
+          '_matrix/client/v1/red_packet/records/grabbed_by_packet_id/$packetId',
+    );
+    final request = Request('POST', baseUri!.resolveUri(requestUri));
+    request.headers['authorization'] = 'Bearer ${bearerToken!}';
+    request.headers['content-type'] = 'application/json';
+    request.bodyBytes = utf8.encode(
+      jsonEncode({
+        'packet_id': packetId,
+        'limit': 500,
+        'page': 1,
+      }),
+    );
     final response = await httpClient.send(request);
     final responseBody = await response.stream.toBytes();
     if (response.statusCode != 200) unexpectedResponse(response, responseBody);
