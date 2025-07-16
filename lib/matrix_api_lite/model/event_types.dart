@@ -115,4 +115,5 @@ abstract class EventTypes {
   static const String GroupCallMemberAssertedIdentity =
       '$GroupCallMember.asserted_identity';
   static const String RedPacket = 'm.room.red_packet';
+  static const String RedPacketStatue = 'm.room.red_packet_status';
 }

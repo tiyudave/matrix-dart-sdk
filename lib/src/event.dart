@@ -940,6 +940,30 @@ class Event extends MatrixEvent {
           : senderFromMemoryOrFallback.calcDisplayname(i18n: i18n);
       localizedBody = '$senderNameOrYou: $localizedBody';
     }
+    if (type == EventTypes.RedPacketStatue) {
+      final status = content['status']?.toString();
+      final isGroup =
+          content['room_id'] != null && content['room_id']?.toString() != null;
+      if (status == 'COMPLETED') {
+        if (isGroup) {
+          var userId = content['user_id']?.toString().split(':').first ?? '';
+          if (userId.startsWith('@')) {
+            userId = userId.replaceFirst('@', '');
+          }
+          localizedBody = '$userId 领取了红包';
+        } else {
+          localizedBody = '红包已领取';
+        }
+      } else if (status == 'REFUNDED') {
+        localizedBody = '红包已退回';
+      } else if (status == 'PENDING') {
+        var userId = content['user_id']?.toString().split(':').first ?? '';
+        if (userId.startsWith('@')) {
+          userId = userId.replaceFirst('@', '');
+        }
+        localizedBody = '$userId 领取了红包';
+      }
+    }
 
     return localizedBody;
   }
@@ -1106,9 +1130,11 @@ class Event extends MatrixEvent {
   // update from : https://stackoverflow.com/a/67705964
   static const _unicodeSequences =
       r'\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]';
+
   // the above sequence but with copyright, trade mark sign and option selection
   static const _paddedUnicodeSequence =
       r'(?:\u00a9|\u00ae|' + _unicodeSequences + r')[\ufe00-\ufe0f]?';
+
   // should match a <img> tag with the matrix emote/emoticon attribute set
   static const _matrixEmoticonSequence =
       r'<img[^>]+data-mx-(?:emote|emoticon)(?==|>|\s)[^>]*>';
