@@ -6166,7 +6166,7 @@ class Api {
     request.bodyBytes = utf8.encode(
       jsonEncode({
         'packet_id': packetId,
-        'limit': 500,
+        'limit': 99,
         'page': 1,
       }),
     );
