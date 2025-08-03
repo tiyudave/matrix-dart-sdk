@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -11,9 +12,9 @@ mixin DatabaseFileStorage {
   late final Duration? deleteFilesAfterDuration;
 
   File _getFileFromMxc(Uri mxcUri) {
-    final fileName = mxcUri.toString().split('/').last;
+    final fileName = base64Url.encode(utf8.encode(mxcUri.toString()));
     final dirPath = Directory.fromUri(fileStorageLocation!).path;
-    final filePath = join(dirPath, fileName); // 自动使用正确分隔符
+    final filePath = join(dirPath, fileName);
     return File(filePath);
   }
 
