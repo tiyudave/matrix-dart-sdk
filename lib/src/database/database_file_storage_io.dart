@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:matrix/matrix.dart';
+import 'package:path/path.dart';
 
 mixin DatabaseFileStorage {
   bool get supportsFileStoring => fileStorageLocation != null;
@@ -9,9 +10,12 @@ mixin DatabaseFileStorage {
   late final Uri? fileStorageLocation;
   late final Duration? deleteFilesAfterDuration;
 
-  File _getFileFromMxc(Uri mxcUri) => File(
-        '${Directory.fromUri(fileStorageLocation!).path}/${mxcUri.toString().split('/').last}',
-      );
+  File _getFileFromMxc(Uri mxcUri) {
+    final fileName = mxcUri.toString().split('/').last;
+    final dirPath = Directory.fromUri(fileStorageLocation!).path;
+    final filePath = join(dirPath, fileName); // 自动使用正确分隔符
+    return File(filePath);
+  }
 
   Future<void> storeFile(Uri mxcUri, Uint8List bytes, int time) async {
     final fileStorageLocation = this.fileStorageLocation;
