@@ -2389,11 +2389,14 @@ class Client extends MatrixApi {
       _currentSyncId = syncRequest.hashCode;
       onSyncStatus.add(SyncStatusUpdate(SyncStatus.waitingForResponse));
 
-      // The timeout for the response from the server. If we do not set a sync
-      // timeout (for initial sync) we give the server a longer time to
-      // responde.
-      final responseTimeout =
-          timeout == null ? null : timeout + const Duration(seconds: 10);
+      // Initial syncs can take significantly longer for accounts with many
+      // rooms. Keep the server-side timeout at zero, but allow enough time for
+      // the response before retrying the complete initial sync.
+      final responseTimeout = timeout == Duration.zero
+          ? const Duration(minutes: 2)
+          : timeout == null
+              ? null
+              : timeout + const Duration(seconds: 10);
 
       final syncResp = responseTimeout == null
           ? await syncRequest
