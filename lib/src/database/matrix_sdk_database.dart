@@ -618,9 +618,8 @@ class MatrixSdkDatabase extends DatabaseApi with DatabaseFileStorage {
 
     // Get the room account data
     final allKeys = await _roomAccountDataBox.getAllKeys();
-    final roomAccountDataKeys = allKeys
-        .where((key) => TupleKey.fromString(key).parts.first == roomId)
-        .toList();
+    final roomAccountDataKeys =
+        allKeys.where((key) => _isKeyOfRoom(key, roomId)).toList();
     final roomAccountDataList =
         await _roomAccountDataBox.getAll(roomAccountDataKeys);
 
@@ -634,7 +633,7 @@ class MatrixSdkDatabase extends DatabaseApi with DatabaseFileStorage {
     if (loadImportantStates) {
       final preloadRoomStateKeys = await _preloadRoomStateBox.getAllKeys();
       final keysForRoom = preloadRoomStateKeys
-          .where((key) => TupleKey.fromString(key).parts.first == roomId)
+          .where((key) => _isKeyOfRoom(key, roomId))
           .toList();
       final rawStates = await _preloadRoomStateBox.getAll(keysForRoom);
 
@@ -727,8 +726,9 @@ class MatrixSdkDatabase extends DatabaseApi with DatabaseFileStorage {
     Room room,
   ) async {
     final keys = (await _nonPreloadRoomStateBox.getAllKeys()).where((key) {
+      if (!_isKeyOfRoom(key, room.id)) return false;
       final tuple = TupleKey.fromString(key);
-      return tuple.parts.first == room.id && !events.contains(tuple.parts[1]);
+      return !events.contains(tuple.parts[1]);
     });
 
     final unimportantEvents = <Event>[];
@@ -810,7 +810,7 @@ class MatrixSdkDatabase extends DatabaseApi with DatabaseFileStorage {
   Future<List<User>> getUsers(Room room) async {
     final users = <User>[];
     final keys = (await _roomMembersBox.getAllKeys())
-        .where((key) => TupleKey.fromString(key).parts.first == room.id)
+        .where((key) => _isKeyOfRoom(key, room.id))
         .toList();
     final states = await _roomMembersBox.getAll(keys);
     states.removeWhere((state) => state == null);
@@ -1817,6 +1817,20 @@ class MatrixSdkDatabase extends DatabaseApi with DatabaseFileStorage {
         profile.toJson(),
       );
 }
+
+/// Whether [key] (a [TupleKey] string) belongs to [roomId], i.e. its first
+/// part equals [roomId].
+///
+/// Equivalent to `TupleKey.fromString(key).parts.first == roomId` for keys with
+/// at least two parts (all room scoped boxes), but avoids splitting every key.
+/// These lookups scan *all* keys of a box for every single room, so on large
+/// accounts (hundreds of rooms, tens of thousands of member rows) the split
+/// dominated `getUsers` and made per-sync `updateUserDeviceKeys` block the
+/// isolate for hundreds of milliseconds.
+bool _isKeyOfRoom(String key, String roomId) =>
+    key.length > roomId.length &&
+    key.codeUnitAt(roomId.length) == 124 && // '|'
+    key.startsWith(roomId);
 
 class TupleKey {
   final List<String> parts;
