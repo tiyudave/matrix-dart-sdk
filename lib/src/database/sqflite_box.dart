@@ -40,7 +40,36 @@ class BoxCollection with ZoneTransactionMixin {
     if (!boxNames.contains(name)) {
       throw ('Box with name $name is not in the known box names of this collection.');
     }
-    return Box<V>(name, this);
+    final box = Box<V>(name, this);
+    _registerBox(box);
+    return box;
+  }
+
+  /// 本集合开出的全部 Box，供事务失败时统一清空快取缓存。
+  /// 用弱引用登记，避免让调用方已丢弃的 Box 常驻内存；Box 被回收后其缓存
+  /// 也随之消失，无需再清。
+  final List<WeakReference<Box>> _openedBoxes = [];
+
+  /// 登记新开出的 Box，并顺手剔除已被回收的弱引用，防止列表无限增长。
+  /// 同名 Box 开多次会得到多个实例（各自有缓存），因此按实例登记而非按名字。
+  void _registerBox(Box box) {
+    _openedBoxes.removeWhere((ref) => ref.target == null);
+    _openedBoxes.add(WeakReference(box));
+  }
+
+  /// 清空本集合下全部 Box 的快取缓存，仅在事务失败时调用。
+  /// 失败事务里的 put/delete 已改写缓存但 batch 未落盘，不清会留下「幻影」值，
+  /// 后续读到幻影会误判数据已存在而跳过写入（例如时间线片段永不落盘）。
+  ///
+  /// 已知限制：清的是全部缓存，不区分键属于哪个 batch。若此刻还有别的未提交
+  /// batch（嵌套事务的外层，或事务 zone 内并行派生的嵌套事务），它写过的键也被
+  /// 清掉，之后回源读到库里的旧值：外层事务读不到自己的写，该 batch 提交后缓存
+  /// 比库旧，对同键读改写还会覆盖已提交数据。只在「内层失败被外层吞掉」或并行
+  /// 嵌套事务里出现，见 test/box_transaction_failure_test.dart 的特征测试。
+  void _clearAllQuickAccessCaches() {
+    for (final ref in _openedBoxes) {
+      ref.target?.clearQuickAccessCache();
+    }
   }
 
   Batch? _activeBatch;
@@ -53,9 +82,20 @@ class BoxCollection with ZoneTransactionMixin {
       zoneTransaction(() async {
         final batch = _db.batch();
         _activeBatch = batch;
-        await action();
-        _activeBatch = null;
-        await batch.commit(noResult: true);
+        try {
+          try {
+            await action();
+          } finally {
+            // action 抛错时也必须复位，否则之后的非事务写会落进永不提交的
+            // 孤儿 batch。成功路径与原实现一致：先置 null 再提交。
+            _activeBatch = null;
+          }
+          await batch.commit(noResult: true);
+        } catch (_) {
+          // action 或提交失败：batch 未落盘，清掉缓存里的幻影后原样抛出。
+          _clearAllQuickAccessCaches();
+          rethrow;
+        }
       });
 
   Future<void> clear() => transaction(
