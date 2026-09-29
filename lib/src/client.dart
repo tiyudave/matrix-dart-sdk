@@ -2288,8 +2288,11 @@ class Client extends MatrixApi {
   /// Pass a timeout to set how long the server waits before sending an empty response.
   /// (Corresponds to the timeout param on the /sync request.)
   Future<void> _sync({Duration? timeout}) {
+    // F3：记下本链，收尾时判断它是否仍是当前链（见 [guardSyncChainOwnership]）。
+    late final Future<void> chain;
     final currentSync =
-        _currentSync ??= _innerSync(timeout: timeout).whenComplete(() {
+        _currentSync ??= chain = _innerSync(timeout: timeout).whenComplete(() {
+      if (guardSyncChainOwnership && !identical(_currentSync, chain)) return;
       _currentSync = null;
       if (_backgroundSync && isLogged() && !_disposed) {
         _sync();
@@ -3873,6 +3876,16 @@ class Client extends MatrixApi {
     // reset _aborted for being able to restart the sync.
     _aborted = false;
   }
+
+  /// F3（同步链归属守卫）开关：为 true 时，同步链收尾只在自己仍是当前链时才清空
+  /// 当前链并按后台同步设置续起下一轮；已被 [abortSync] 放弃的旧链收尾时什么也不做。
+  ///
+  /// 缺省 false，行为与上游逐字一致。上游的缺陷：[abortSync] 把当前链置空后并不等
+  /// 旧链结束，旧链若停在事务中、cleaningUp 阶段（[updateUserDeviceKeys]、
+  /// [processToDeviceQueue]）或在途的 [sync] 上，而调用方随后又拉起了新链（如
+  /// [clearCache] 末尾的 `backgroundSync = true`），旧链收尾时会清掉新链的记录并
+  /// 再起一条，形成两条同步链并发。子类覆写为 true 即可消除这类双链。
+  bool get guardSyncChainOwnership => false;
 
   /// Stops the synchronization and closes the database. After this
   /// you can safely make this Client instance null.
