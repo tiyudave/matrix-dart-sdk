@@ -28,6 +28,7 @@ import 'package:matrix/encryption/utils/ssss_cache.dart';
 import 'package:matrix/encryption/utils/stored_inbound_group_session.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/utils/copy_map.dart';
+import 'package:matrix/src/utils/event_loop_yielder.dart';
 import 'package:matrix/src/utils/queued_to_device_event.dart';
 import 'package:matrix/src/utils/run_benchmarked.dart';
 
@@ -650,6 +651,11 @@ class MatrixSdkDatabase extends DatabaseApi with DatabaseFileStorage {
   Future<List<Room>> getRoomList(Client client) =>
       runBenchmarked<List<Room>>('Get room list from store', () async {
         final rooms = <String, Room>{};
+        // Large accounts store tens of thousands of preloaded states; parsing
+        // them used to be one uninterrupted block before the first frame.
+        // The rooms are not visible to anybody until this returns, and the
+        // sync loop awaits `roomsLoading`, so yielding in between is safe.
+        final yielder = EventLoopYielder();
 
         final rawRooms = await _roomsBox.getAllValues();
 
@@ -659,10 +665,12 @@ class MatrixSdkDatabase extends DatabaseApi with DatabaseFileStorage {
 
           // Add to the list and continue.
           rooms[room.id] = room;
+          if (yielder.shouldYield) await yielder.yieldNow();
         }
 
         final roomStatesDataRaws = await _preloadRoomStateBox.getAllValues();
         for (final entry in roomStatesDataRaws.entries) {
+          if (yielder.shouldYield) await yielder.yieldNow();
           final keys = TupleKey.fromString(entry.key);
           final roomId = keys.parts.first;
           final room = rooms[roomId];
@@ -681,6 +689,7 @@ class MatrixSdkDatabase extends DatabaseApi with DatabaseFileStorage {
         // Get the room account data
         final roomAccountDataRaws = await _roomAccountDataBox.getAllValues();
         for (final entry in roomAccountDataRaws.entries) {
+          if (yielder.shouldYield) await yielder.yieldNow();
           final keys = TupleKey.fromString(entry.key);
           final basicRoomEvent = BasicEvent.fromJson(
             copyMap(entry.value),
