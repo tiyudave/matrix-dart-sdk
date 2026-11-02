@@ -11,6 +11,7 @@ import 'package:matrix/matrix_api_lite/model/auth/authentication_identifier.dart
 import 'package:matrix/matrix_api_lite/model/matrix_event.dart';
 import 'package:matrix/matrix_api_lite/model/matrix_keys.dart';
 import 'package:matrix/matrix_api_lite/model/sync_update.dart';
+import 'package:matrix/matrix_api_lite/utils/decode_sync_update.dart';
 
 // ignore_for_file: provide_deprecation_message
 
@@ -5065,9 +5066,8 @@ class Api {
     final response = await httpClient.send(request);
     final responseBody = await response.stream.toBytes();
     if (response.statusCode != 200) unexpectedResponse(response, responseBody);
-    final responseString = utf8.decode(responseBody);
-    final json = jsonDecode(responseString);
-    return SyncUpdate.fromJson(json as Map<String, Object?>);
+    // Large bodies are decoded off the main isolate, see [decodeSyncUpdate].
+    return decodeSyncUpdate(responseBody);
   }
 
   /// Retrieve an array of third-party network locations from a Matrix room
