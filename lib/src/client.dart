@@ -444,11 +444,65 @@ class Client extends MatrixApi {
   /// found. If you have loaded the [loadArchive()] before, it can also return
   /// archived rooms.
   Room? getRoomById(String id) {
-    for (final room in <Room>[...rooms, ..._archivedRooms.map((e) => e.room)]) {
-      if (room.id == id) return room;
+    final room = _joinedOrInvitedRoomById(id);
+    if (room != null) return room;
+    for (final archive in _archivedRooms) {
+      if (archive.room.id == id) return archive.room;
     }
-
     return null;
+  }
+
+  /// Position of each room id in [_rooms] as of the last index build.
+  final Map<String, int> _roomPositionById = {};
+
+  /// The list instance and its length when [_roomPositionById] was built.
+  List<Room>? _indexedRooms;
+  int _indexedRoomsLength = -1;
+
+  /// Looks up [id] in [rooms] through a self-validating position index.
+  ///
+  /// [getRoomById] is called from hot paths (every timeline event, every room
+  /// state update, every chat list row). The previous implementation copied
+  /// all rooms plus all archived rooms into a fresh list on *each* call, which
+  /// on large accounts (thousands of rooms) turned into thousands of list
+  /// allocations per sync and per frame.
+  ///
+  /// [rooms] is a public, mutable list (inserted into, removed from, sorted
+  /// and cleared in place, replaced by the testing setter), so the index never
+  /// trusts itself: a cached position is only used when the room at that
+  /// position still has the requested id. The index is rebuilt when the list
+  /// instance or its length changed, or when a scan finds a room whose cached
+  /// position went stale (e.g. after sorting). Room ids are unique in [rooms]
+  /// (the sync code checks with `indexWhere` before inserting), so the result
+  /// is the same as a linear scan.
+  Room? _joinedOrInvitedRoomById(String id) {
+    final rooms = _rooms;
+    if (!identical(rooms, _indexedRooms) ||
+        rooms.length != _indexedRoomsLength) {
+      _rebuildRoomPositionIndex(rooms);
+    }
+    final position = _roomPositionById[id];
+    if (position != null && position < rooms.length) {
+      final candidate = rooms[position];
+      if (candidate.id == id) return candidate;
+    }
+    for (var i = 0; i < rooms.length; i++) {
+      final room = rooms[i];
+      if (room.id == id) {
+        _rebuildRoomPositionIndex(rooms);
+        return room;
+      }
+    }
+    return null;
+  }
+
+  void _rebuildRoomPositionIndex(List<Room> rooms) {
+    _roomPositionById.clear();
+    for (var i = 0; i < rooms.length; i++) {
+      _roomPositionById.putIfAbsent(rooms[i].id, () => i);
+    }
+    _indexedRooms = rooms;
+    _indexedRoomsLength = rooms.length;
   }
 
   Map<String, dynamic> get directChats =>

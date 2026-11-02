@@ -762,44 +762,26 @@ class MatrixSdkDatabase extends DatabaseApi with DatabaseFileStorage {
         final userDeviceKeys = await _userDeviceKeysBox.getAllValues();
         final userCrossSigningKeys =
             await _userCrossSigningKeysBox.getAllValues();
+        // Bucket both boxes by user once instead of filtering (and splitting)
+        // every key of both boxes again for every single user.
+        final deviceKeysByUser = _groupByFirstTuplePart(userDeviceKeys);
+        final crossSigningKeysByUser =
+            _groupByFirstTuplePart(userCrossSigningKeys);
         for (final userId in deviceKeysOutdated.keys) {
-          final deviceKeysBoxKeys = userDeviceKeys.keys.where((tuple) {
-            final tupleKey = TupleKey.fromString(tuple);
-            return tupleKey.parts.first == userId;
-          });
-          final crossSigningKeysBoxKeys =
-              userCrossSigningKeys.keys.where((tuple) {
-            final tupleKey = TupleKey.fromString(tuple);
-            return tupleKey.parts.first == userId;
-          });
-          final childEntries = deviceKeysBoxKeys.map(
-            (key) {
-              final userDeviceKey = userDeviceKeys[key];
-              if (userDeviceKey == null) return null;
-              return copyMap(userDeviceKey);
-            },
-          );
-          final crossSigningEntries = crossSigningKeysBoxKeys.map(
-            (key) {
-              final crossSigningKey = userCrossSigningKeys[key];
-              if (crossSigningKey == null) return null;
-              return copyMap(crossSigningKey);
-            },
-          );
           res[userId] = DeviceKeysList.fromDbJson(
             {
               'client_id': client.id,
               'user_id': userId,
               'outdated': deviceKeysOutdated[userId],
             },
-            childEntries
-                .where((c) => c != null)
-                .toList()
-                .cast<Map<String, dynamic>>(),
-            crossSigningEntries
-                .where((c) => c != null)
-                .toList()
-                .cast<Map<String, dynamic>>(),
+            [
+              for (final entry in deviceKeysByUser[userId] ?? const [])
+                copyMap(entry),
+            ],
+            [
+              for (final entry in crossSigningKeysByUser[userId] ?? const [])
+                copyMap(entry),
+            ],
             client,
           );
         }
@@ -1831,6 +1813,26 @@ bool _isKeyOfRoom(String key, String roomId) =>
     key.length > roomId.length &&
     key.codeUnitAt(roomId.length) == 124 && // '|'
     key.startsWith(roomId);
+
+/// Groups the values of a [TupleKey] keyed box by the first part of their key,
+/// keeping the iteration order of [values] inside every group.
+///
+/// Same grouping as filtering the keys with
+/// `TupleKey.fromString(key).parts.first == firstPart` for every first part,
+/// but every key is looked at once. [getUserDeviceKeys] used to filter both
+/// device key boxes for every tracked user, i.e. "users × keys" splits at
+/// startup, which dominated client init on accounts that track thousands of
+/// users.
+Map<String, List<Map>> _groupByFirstTuplePart(Map<String, Map> values) {
+  final groups = <String, List<Map>>{};
+  for (final entry in values.entries) {
+    final key = entry.key;
+    final separator = key.indexOf('|');
+    final firstPart = separator == -1 ? key : key.substring(0, separator);
+    (groups[firstPart] ??= []).add(entry.value);
+  }
+  return groups;
+}
 
 class TupleKey {
   final List<String> parts;
